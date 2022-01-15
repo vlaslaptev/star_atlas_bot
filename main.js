@@ -50,9 +50,9 @@ async function main() {
     await printCurrentBalances()
 
     async function sendTransaction(txInstruction) {
-        // const tx = new web3.Transaction().add(txInstruction)
-        // const res = await connection.sendTransaction(tx, [keypair])
-       //  console.log("send tx", res)
+        const tx = new web3.Transaction().add(txInstruction)
+        const res = await connection.sendTransaction(tx, [keypair])
+        console.log("send tx", res)
         await delay(1000)
     }
     let shipStakingInfo = await atlas.getAllFleetsForUserPublicKey(connection, userPublicKey, scoreProgId)
