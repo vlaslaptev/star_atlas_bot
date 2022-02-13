@@ -41,12 +41,14 @@ async function main() {
         })[0].pubkey
     }
 
+    const atlasTokenCount = getTokenAmount(atlasTokenMint);
     const food = getTokenAmount(foodTokenMint);
     const toolkit = getTokenAmount(toolkitTokenMint);
     const fuel = getTokenAmount(fuelTokenMint);
     const ammunition = getTokenAmount(ammunitionTokenMint);
     console.log('');
     console.log('CURRENT BALANCES: ')
+    console.log('  ATLAS: ' +  atlasTokenCount)
     console.log('  FOOD: ' +  food)
     console.log('  TOOLKIT: ' + toolkit)
     console.log('  FUEL: ' +  fuel)
@@ -57,6 +59,22 @@ async function main() {
         const tx = new web3.Transaction().add(txInstruction)
         const res = await connection.sendTransaction(tx, [keypair])
         console.log("send tx", res)
+    }
+
+    function calcAtlasPending(nowSec, shipStakingInfo, shipInfo) {
+        const shipQuantity = shipStakingInfo.shipQuantityInEscrow
+        let minTimePassed = nowSec - shipStakingInfo.currentCapacityTimestamp.toNumber();
+        minTimePassed = Math.min(minTimePassed, shipStakingInfo.fuelCurrentCapacity.toNumber(),
+            shipStakingInfo.foodCurrentCapacity.toNumber(),
+            shipStakingInfo.armsCurrentCapacity.toNumber(),
+            shipStakingInfo.healthCurrentCapacity.toNumber()
+        )
+
+        let atlasPending = shipStakingInfo.totalTimeStaked.toNumber() + minTimePassed - shipStakingInfo.stakedTimePaid.toNumber()
+        let t = shipStakingInfo.pendingRewards.toNumber() / Math.pow(10, 8)
+        atlasPending = atlasPending * shipInfo.rewardRatePerSecond * shipQuantity;
+        atlasPending = (atlasPending / 100000000) + (t < 0 ? 0 : t)
+        return parseFloat(atlasPending.toFixed(4))
     }
 
     async function getTxInstructionFood(scoreVarsShipInfo, stakingInfo) {
@@ -116,22 +134,28 @@ async function main() {
             const shipCount = shipStakingInfo[i].shipQuantityInEscrow
             console.log("-------------------------------")
             console.log(" " + (i + 1) + " \033[1m Ship - " + nftNames[shipStakingInfo[i].shipMint] + " \033[0m " + shipCount + " SHIPS (" + shipStakingInfo[i].shipMint + ")")
-            // console.log("    ATLAS pending - " + (shipInfo.rewardRatePerSecond * shipStakingInfo[i].totalTimeStaked) / 100000000)
 
-            let leftHealth = (shipInfo.toolkitMaxReserve * shipCount) - (nowSec - shipStakingInfo[i].repairedAtTimestamp) / (shipInfo.millisecondsToBurnOneToolkit / 1000)
-            let percentHealth = leftHealth / ((shipInfo.toolkitMaxReserve * shipCount) / 100)
+            const atlasPending = calcAtlasPending(nowSec, shipStakingInfo[i], shipInfo)
+            console.log("    ATLAS pending - " + atlasPending)
+
+            const toolkitMaxReserve = shipStakingInfo[i].healthCurrentCapacity / (shipInfo.millisecondsToBurnOneToolkit / 1000)
+            const leftHealth = toolkitMaxReserve - (nowSec - shipStakingInfo[i].currentCapacityTimestamp) / (shipInfo.millisecondsToBurnOneToolkit / 1000)
+            const percentHealth = Math.ceil(leftHealth / ((shipInfo.toolkitMaxReserve) / 100))
             percentHealth < 10 ? printRedPercent(percentHealth, "HEALTH") : printGreenPercent(percentHealth, "HEALTH")
 
-            let leftFuel = (shipInfo.fuelMaxReserve * shipCount) - (nowSec - shipStakingInfo[i].fueledAtTimestamp) / (shipInfo.millisecondsToBurnOneFuel / 1000)
-            let percentFuel = leftFuel / ((shipInfo.fuelMaxReserve * shipCount) / 100)
+            const fuelMaxReserve = shipStakingInfo[i].fuelCurrentCapacity / (shipInfo.millisecondsToBurnOneFuel / 1000)
+            const leftFuel = fuelMaxReserve - (nowSec - shipStakingInfo[i].currentCapacityTimestamp) / (shipInfo.millisecondsToBurnOneFuel / 1000)
+            const percentFuel = Math.round(leftFuel / ((shipInfo.fuelMaxReserve) / 100))
             percentFuel < 10 ? printRedPercent(percentFuel, "FUEL") : printGreenPercent(percentFuel, "FUEL")
 
-            let leftFood = (shipInfo.foodMaxReserve * shipCount) - (nowSec - shipStakingInfo[i].fedAtTimestamp) / (shipInfo.millisecondsToBurnOneFood / 1000)
-            let percentFood = leftFood / ((shipInfo.foodMaxReserve * shipCount) / 100)
+            const foodMaxReserve = shipStakingInfo[i].foodCurrentCapacity / (shipInfo.millisecondsToBurnOneFood / 1000) //89221
+            const leftFood = foodMaxReserve - (nowSec - shipStakingInfo[i].currentCapacityTimestamp) / (shipInfo.millisecondsToBurnOneFood / 1000)
+            const percentFood = Math.round(leftFood / ((shipInfo.foodMaxReserve) / 100))
             percentFood < 10 ? printRedPercent(percentFood, "FOOD") : printGreenPercent(percentFood, "FOOD")
 
-            let leftArms = (shipInfo.armsMaxReserve * shipCount) - (nowSec - shipStakingInfo[i].armedAtTimestamp) / (shipInfo.millisecondsToBurnOneArms / 1000)
-            let percentArms = leftArms / ((shipInfo.armsMaxReserve * shipCount) / 100)
+            const armsMaxReserve = shipStakingInfo[i].armsCurrentCapacity / (shipInfo.millisecondsToBurnOneArms / 1000)
+            const leftArms = armsMaxReserve - (nowSec - shipStakingInfo[i].currentCapacityTimestamp) / (shipInfo.millisecondsToBurnOneArms / 1000)
+            const percentArms = Math.round(leftArms / ((shipInfo.armsMaxReserve) / 100))
             percentArms < 10 ? printRedPercent(percentArms, "AMMO") : printGreenPercent(percentArms, "AMMO")
             console.log(' ')
             needReSupply = needReSupply || leftHealth < 10 || percentFuel < 10 || percentFood < 10 || percentArms < 10
@@ -173,8 +197,13 @@ async function main() {
         console.log("Sending Rearm... ")
         await sendTransaction(await getTxInstructionAmmunition(shipInfo, shipStakingInfo[i]))
         await delay(1000)
-        //console.log("Claim ATLAS... ")
-        //await sendTransaction(await atlas.createHarvestInstruction(connection, userPublicKey, getTokenPublicKey(atlasTokenMint), shipStakingInfo[i].shipMint, scoreProgId))
+
+        const nowSec = new Date().getTime() / 1000
+        if (calcAtlasPending(nowSec, shipStakingInfo[i], shipInfo) > 1) {
+            console.log("Claim ATLAS... ")
+            await sendTransaction(await atlas.createHarvestInstruction(connection, userPublicKey, getTokenPublicKey(atlasTokenMint), shipStakingInfo[i].shipMint, scoreProgId))
+            await delay(1000)
+        }
         console.log("----")
     }
 
@@ -193,6 +222,11 @@ async function main() {
 
     shipStakingInfo = await atlas.getAllFleetsForUserPublicKey(connection, userPublicKey, scoreProgId)
     printShipStatus()
+    console.log(' ')
+
+    const currentAtlasBalance = getTokenAmount(atlasTokenMint)
+    console.log('TOTAL CLAIM ATLAS:\033[92m + ' + (currentAtlasBalance - atlasTokenCount) + "\033[0m ")
+    console.log('CURRENT ATLAS BALANCE: ' + currentAtlasBalance)
     console.log(' ')
 }
 main()
