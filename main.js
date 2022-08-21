@@ -2,6 +2,7 @@ import fs from 'fs'
 import bs58 from 'bs58'
 import web3 from '@solana/web3.js'
 import atlas from '@staratlas/factory/dist/score.js'
+import {requestNftNames} from './httpClient.js'
 import {getTokenAmount, getTokenPublicKey, delay, getNowSec} from './utils.js'
 import {calcAtlasPending, calcPercentHealthLeft, calcPercentFuelLeft, calcPercentArmsLeft, calcPercentFoodLeft} from './calcUtils.js'
 import {printShipStatusInfo, printStartTime, printCurrentBalance, printSpendResources} from './logger.js'
@@ -23,7 +24,7 @@ async function main() {
     printStartTime()
 
     const connection = new web3.Connection(web3.clusterApiUrl(CLUSTER_NAME))
-    const nftNames = JSON.parse(fs.readFileSync('nft_names.json', 'utf8')) // todo replace with online request
+    const nftNames = await requestNftNames();
     const privateKeyStr = fs.readFileSync('../key.txt', 'utf8').replace(/(\r\n|\n|\r)/gm, "")
     const keypair = web3.Keypair.fromSeed(bs58.decode(privateKeyStr).slice(0, 32))
     const userPublicKey = keypair.publicKey
