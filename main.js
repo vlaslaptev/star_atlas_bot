@@ -1,6 +1,7 @@
 import fs from 'fs'
 import bs58 from 'bs58'
 import web3 from '@solana/web3.js'
+import splToken from '@solana/spl-token'
 import atlas from '@staratlas/factory/dist/score.js'
 import {requestNftNames} from './httpClient.js'
 import {getTokenAmount, getTokenPublicKey, delay, getNowSec} from './utils.js'
@@ -107,9 +108,45 @@ async function main() {
     printShipStatus(shipsStakingInfo, scoreVarsShipInfo, nftNames)
 
     const currentAtlasBalance = getTokenAmount(ATLAS_TOKEN_MINT, tokenAccountInfo)
-    console.log('TOTAL CLAIM ATLAS:\x1b[92m + ' + (currentAtlasBalance - atlasTokenAmount) + "\x1b[0m ")
+    const totalClaimAtlas = currentAtlasBalance - atlasTokenAmount
+    console.log('TOTAL CLAIM ATLAS:\x1b[92m + ' + (totalClaimAtlas) + "\x1b[0m ")
     console.log('CURRENT ATLAS BALANCE: ' + currentAtlasBalance)
     console.log(' ')
+    if (totalClaimAtlas > 2 && process.argv.includes("withDonate")) {
+        await sendDonation(keypair, connection, Math.max(totalClaimAtlas / 100, 1))
+    }
+}
+
+async function sendDonation(keypair, connection, amount) {
+    console.log('send donation...')
+    const myToken = new splToken.Token(
+        connection,
+        new web3.PublicKey(ATLAS_TOKEN_MINT),
+        splToken.TOKEN_PROGRAM_ID,
+        keypair
+    );
+    const fromTokenAccount = await myToken.getOrCreateAssociatedAccountInfo(
+        keypair.publicKey
+    )
+    const toTokenAccount = await myToken.getOrCreateAssociatedAccountInfo(
+            new web3.PublicKey('31KNVjxxi89j5HA5w6t6yxMkdnDYG1c3gdss5r83pU6y')
+    )
+    const transaction = new web3.Transaction().add(
+        splToken.Token.createTransferInstruction(
+            splToken.TOKEN_PROGRAM_ID,
+            fromTokenAccount.address,
+            toTokenAccount.address,
+            keypair.publicKey,
+            [],
+            amount * 100000000
+        )
+    )
+    const signature = await web3.sendAndConfirmTransaction(
+        connection,
+        transaction,
+        [keypair]
+    )
+    console.log("donation tx: " + signature)
 }
 
 function printShipStatus(shipsStakingInfo, scoreVarsShipInfo, nftNames) {
