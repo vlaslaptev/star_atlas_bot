@@ -3,6 +3,7 @@ import bs58 from 'bs58'
 import web3 from '@solana/web3.js'
 import splToken from '@solana/spl-token'
 import atlas from '@staratlas/factory/dist/score.js'
+import cron from 'node-cron'
 import {requestNftNames} from './httpClient.js'
 import {getTokenAmount, getTokenPublicKey, delay, getNowSec} from './utils.js'
 import {calcAtlasPending, calcPercentHealthLeft, calcPercentFuelLeft, calcPercentArmsLeft, calcPercentFoodLeft} from './calcUtils.js'
@@ -22,6 +23,7 @@ const CLUSTER_NAME = "mainnet-beta"
 const TX_DELAY_MS = 3000
 const QUICK_NODE_BASE_URL = 'https://maximum-restless-seed.solana-mainnet.discover.quiknode.pro/'
 const QUICK_NODE_ARG = '-quicknode'
+const CRON_EXPRESSION = '45 */6 * * *';
 
 async function main() {
     printStartTime()
@@ -183,6 +185,8 @@ function getConnection() {
     return new web3.Connection(url)
 }
 
-main()
-    .then(() => process.exit(0))
-    .catch((err) => console.error(err))
+cron.schedule(CRON_EXPRESSION, main);
+
+// main()
+//     .then(() => process.exit(0))
+//     .catch((err) => console.error(err))

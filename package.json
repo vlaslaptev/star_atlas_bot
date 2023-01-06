@@ -17,6 +17,7 @@
     "@staratlas/factory": "^0.1.25",
     "axios": "^0.27.2",
     "bs58": "^4.0.1",
+    "node-cron": "^3.0.2",
     "prompt-sync": "^4.2.0"
   }
 }
