@@ -20,16 +20,16 @@ import {
 
 const CLUSTER_NAME = "mainnet-beta"
 const TX_DELAY_MS = 3000
+const QUICK_NODE_BASE_URL = 'https://maximum-restless-seed.solana-mainnet.discover.quiknode.pro/'
+const QUICK_NODE_ARG = '-quicknode'
 
 async function main() {
     printStartTime()
-
-    const connection = new web3.Connection(web3.clusterApiUrl(CLUSTER_NAME))
-    const nftNames = await requestNftNames();
     const privateKeyStr = fs.readFileSync('../key.txt', 'utf8').replace(/(\r\n|\n|\r)/gm, "")
     const keypair = web3.Keypair.fromSeed(bs58.decode(privateKeyStr).slice(0, 32))
     const userPublicKey = keypair.publicKey
-
+    const nftNames = await requestNftNames();
+    const connection = getConnection()
     console.log("request TokenAccounts...")
     let tokenAccountInfo = await connection.getParsedTokenAccountsByOwner(
         userPublicKey, {programId: TOKEN_PROGRAM_ID}, 'confirmed'
@@ -170,6 +170,17 @@ function printShipStatus(shipsStakingInfo, scoreVarsShipInfo, nftNames) {
     console.log('-------------------------------')
     console.log(' ')
     return needReSupply
+}
+
+function getConnection() {
+    let url = web3.clusterApiUrl(CLUSTER_NAME);
+    process.argv.forEach((arg, num) => {
+        if (arg === QUICK_NODE_ARG) {
+            url = QUICK_NODE_BASE_URL + process.argv[num + 1] + '/'
+            console.log(url)
+        }
+    })
+    return new web3.Connection(url)
 }
 
 main()
